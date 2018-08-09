@@ -4,9 +4,16 @@ CHAT_ID=$CHAT_ID
 URL="https://api.telegram.org/bot$TOKEN"
 SENDURL="$URL/sendMessage"
 GETURL="$URL/getUpdates"
+DEL="$URL/deleteMessage"
 
-function post_message {
-    curl -s -X POST $SENDURL -d chat_id=$CHAT_ID -d text="$1" > /dev/null
+function send_message {
+    ID=$(curl -s -X POST $SENDURL -d chat_id=$CHAT_ID -d text="$1" \
+        | awk -F ':' '{print $4}' \
+        | awk -F ',' '{print $1}')
+}
+
+function delete_last_message {
+    curl -s -X POST $DEL -d chat_id=$CHAT_ID -d message_id=$1 > /dev/null
 }
 
 function get_last_message_info {
@@ -16,22 +23,29 @@ function get_last_message_info {
 }
 
 function get_traffic {
-    TRAFFIC=$(curl -s gateway.engel/traffic.php | awk '/bleiben noch/ {print $42" MB"}')
+    TRAFFIC=$(curl -s gateway.engel/traffic.php | grep -o -E 'bleiben noch.*' | grep -o -E '[0-9]*')
 }
 
 OLDDATE=0
 while [[ 1 ]]; do
-    get_last_message_info
-    if [[ $DATE > $OLDDATE ]]; then
-        OLDDATE=$DATE
-        case $TEXT in
-            traffic)
-                get_traffic
-                post_message "$TRAFFIC" ;;
-            ERROR)
-                post_message "There were errors in your request." ;;
-        esac
-    else
-        sleep 2 # wait n seconds before checking again, therefore have answer delay of n seconds
-    fi
+    printf "."
+    # get_last_message_info
+    # if [[ $DATE > $OLDDATE ]]; then
+    #     OLDDATE=$DATE
+    #     case $TEXT in
+    #         traffic)
+    #             get_traffic
+    #             delete_last_message $ID
+    #             send_message "$TRAFFIC MB" ;;
+    #         ERROR)
+    #             delete_last_message $ID
+    #             send_message "There were errors in your request." ;;
+    #     esac
+    # else
+        # sleep 2 # wait n seconds before checking again, therefore have answer delay of n seconds
+    # fi
+    get_traffic
+    delete_last_message $ID
+    send_message "$TRAFFIC MB"
+    sleep 60
 done
